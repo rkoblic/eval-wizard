@@ -37,22 +37,53 @@ export default function PreviewPage() {
 
   const loadData = async () => {
     try {
-      const response = await fetch(`/api/projects?id=${projectId}`);
-      if (!response.ok) throw new Error("Failed to load project");
-
-      const data = await response.json();
-      setProject(data.project);
-      setTestCases(data.testCases);
-
-      // Default to first test case
-      if (data.testCases.length > 0) {
-        setSelectedTestCaseId(data.testCases[0].id);
-      }
-
-      // Get criteria from session storage (passed from criteria page)
+      // First try to load from session storage (for serverless environment)
+      const storedProject = sessionStorage.getItem(`project_${projectId}`);
+      const storedTestCases = sessionStorage.getItem(`test_cases_${projectId}`);
       const storedCriteria = sessionStorage.getItem(`criteria_${projectId}`);
-      if (storedCriteria) {
-        setCriteriaIds(JSON.parse(storedCriteria));
+
+      if (storedProject && storedTestCases) {
+        // Load from session storage
+        const project = JSON.parse(storedProject);
+        const testCases = JSON.parse(storedTestCases);
+
+        setProject(project);
+        setTestCases(testCases);
+
+        // Default to first test case
+        if (testCases.length > 0) {
+          setSelectedTestCaseId(testCases[0].id);
+        }
+
+        if (storedCriteria) {
+          setCriteriaIds(JSON.parse(storedCriteria));
+        }
+      } else {
+        // Fallback to API if session storage is empty
+        const response = await fetch(`/api/projects?id=${projectId}`);
+        if (!response.ok) throw new Error("Failed to load project");
+
+        const data = await response.json();
+        setProject(data.project);
+        setTestCases(data.testCases);
+
+        // Default to first test case
+        if (data.testCases.length > 0) {
+          setSelectedTestCaseId(data.testCases[0].id);
+        }
+
+        // Get criteria from session storage
+        if (storedCriteria) {
+          setCriteriaIds(JSON.parse(storedCriteria));
+        }
+
+        // Save to session storage for future use
+        if (data.project) {
+          sessionStorage.setItem(`project_${projectId}`, JSON.stringify(data.project));
+        }
+        if (data.testCases) {
+          sessionStorage.setItem(`test_cases_${projectId}`, JSON.stringify(data.testCases));
+        }
       }
     } catch (error) {
       console.error("Error loading project:", error);

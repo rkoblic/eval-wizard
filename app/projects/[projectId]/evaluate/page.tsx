@@ -37,21 +37,49 @@ export default function EvaluatePage() {
 
   const loadData = async () => {
     try {
-      const response = await fetch(`/api/projects?id=${projectId}`);
-      if (!response.ok) throw new Error("Failed to load project");
-
-      const data = await response.json();
-      setProject(data.project);
-      setTestCases(data.testCases);
-
-      // Get criteria from session storage
+      // First try to load from session storage
+      const storedProject = sessionStorage.getItem(`project_${projectId}`);
+      const storedTestCases = sessionStorage.getItem(`test_cases_${projectId}`);
       const storedCriteria = sessionStorage.getItem(`criteria_${projectId}`);
-      if (storedCriteria) {
-        setCriteriaIds(JSON.parse(storedCriteria));
-      }
 
-      const batches = Math.ceil(data.testCases.length / BATCH_SIZE);
-      setTotalBatches(batches);
+      if (storedProject && storedTestCases) {
+        // Load from session storage
+        const project = JSON.parse(storedProject);
+        const testCases = JSON.parse(storedTestCases);
+
+        setProject(project);
+        setTestCases(testCases);
+
+        if (storedCriteria) {
+          setCriteriaIds(JSON.parse(storedCriteria));
+        }
+
+        const batches = Math.ceil(testCases.length / BATCH_SIZE);
+        setTotalBatches(batches);
+      } else {
+        // Fallback to API
+        const response = await fetch(`/api/projects?id=${projectId}`);
+        if (!response.ok) throw new Error("Failed to load project");
+
+        const data = await response.json();
+        setProject(data.project);
+        setTestCases(data.testCases);
+
+        if (storedCriteria) {
+          setCriteriaIds(JSON.parse(storedCriteria));
+        }
+
+        const batches = Math.ceil(data.testCases.length / BATCH_SIZE);
+        setTotalBatches(batches);
+
+        // Save to session storage
+        if (data.project) {
+          sessionStorage.setItem(`project_${projectId}`, JSON.stringify(data.project));
+        }
+        if (data.testCases) {
+          sessionStorage.setItem(`test_cases_${projectId}`, JSON.stringify(data.testCases));
+        }
+      }
     } catch (error) {
       console.error("Error loading project:", error);
       setError("Failed to load project data");

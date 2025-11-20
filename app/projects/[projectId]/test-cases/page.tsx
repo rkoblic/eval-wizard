@@ -31,6 +31,14 @@ export default function TestCasesPage() {
       const data = await response.json();
       setProject(data.project);
       setTestCases(data.testCases);
+
+      // Save to session storage for serverless environment
+      if (data.project) {
+        sessionStorage.setItem(`project_${projectId}`, JSON.stringify(data.project));
+      }
+      if (data.testCases) {
+        sessionStorage.setItem(`test_cases_${projectId}`, JSON.stringify(data.testCases));
+      }
     } catch (error) {
       console.error("Error loading project:", error);
       alert("Failed to load project");
@@ -65,11 +73,15 @@ export default function TestCasesPage() {
   const handleContinue = async () => {
     // Save test cases and proceed to criteria selection
     try {
+      // Save to API (server storage)
       await fetch(`/api/test-cases`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId, testCases }),
       });
+
+      // Also save to session storage as backup for serverless environment
+      sessionStorage.setItem(`test_cases_${projectId}`, JSON.stringify(testCases));
 
       router.push(`/projects/${projectId}/criteria`);
     } catch (error) {
