@@ -16,7 +16,7 @@ export interface ClaudeMessage {
 export async function callClaude(
   messages: ClaudeMessage[],
   systemPrompt?: string,
-  model: string = "claude-3-5-sonnet-20241022",
+  model: string = "claude-3-5-sonnet-20240620",
   temperature: number = 0
 ): Promise<string> {
   try {
