@@ -47,4 +47,20 @@ export async function testAIProduct(
   return callOpenAI(messages, "gpt-4-turbo-preview", 0.7);
 }
 
+/**
+ * Test a Custom GPT or AI agent with full conversation history
+ * Used for multi-turn conversations where context matters
+ */
+export async function testAIProductWithHistory(
+  systemPrompt: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<string> {
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory,
+  ];
+
+  return callOpenAI(messages, "gpt-4-turbo-preview", 0.7);
+}
+
 export default openai;

@@ -1,13 +1,14 @@
 // Shared in-memory storage for all API routes
 // In production, this should be replaced with a database
 
-import { Project, TestCase, EvalRun, EvalResult } from "./types";
+import { Project, TestCase, EvalRun, EvalResult, ConversationResult } from "./types";
 
 // Storage Maps
 export const projects = new Map<string, Project>();
 export const testCases = new Map<string, TestCase[]>();
 export const evalRuns = new Map<string, EvalRun>();
 export const evalResults = new Map<string, EvalResult[]>();
+export const conversationResults = new Map<string, ConversationResult[]>();
 
 // Helper functions
 export function getProject(projectId: string): Project | undefined {
@@ -40,4 +41,12 @@ export function getEvalResults(evalRunId: string): EvalResult[] {
 
 export function saveEvalResults(evalRunId: string, results: EvalResult[]): void {
   evalResults.set(evalRunId, results);
+}
+
+export function getConversationResults(evalRunId: string): ConversationResult[] {
+  return conversationResults.get(evalRunId) || [];
+}
+
+export function saveConversationResults(evalRunId: string, results: ConversationResult[]): void {
+  conversationResults.set(evalRunId, results);
 }

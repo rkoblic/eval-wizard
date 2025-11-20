@@ -11,13 +11,41 @@ export interface Project {
   createdAt: Date;
 }
 
+export interface ConversationTurn {
+  role: "user";
+  content: string;
+  evaluateAfter?: boolean; // Marks this as a checkpoint for evaluation
+}
+
 export interface TestCase {
   id: string;
   projectId: string;
-  input: string;
+  // New conversation-based structure
+  turns?: ConversationTurn[];
+  // Legacy single-turn structure (for backward compatibility)
+  input?: string;
   expectedBehavior?: string;
   source: "ai_generated" | "manual";
   createdAt: Date;
+}
+
+// Helper to normalize test cases to conversation format
+export function normalizeTestCase(testCase: TestCase): {
+  turns: ConversationTurn[];
+  expectedBehavior?: string;
+} {
+  if (testCase.turns && testCase.turns.length > 0) {
+    // Already in new format
+    return {
+      turns: testCase.turns,
+      expectedBehavior: testCase.expectedBehavior,
+    };
+  }
+  // Convert legacy format to conversation
+  return {
+    turns: [{ role: "user", content: testCase.input || "", evaluateAfter: true }],
+    expectedBehavior: testCase.expectedBehavior,
+  };
 }
 
 export interface EvalCriterion {
@@ -44,6 +72,33 @@ export interface EvalResult {
   pass: boolean;
   reasoning: string;
   aiResponse: string;
+  createdAt: Date;
+}
+
+// New result type for conversation evaluations
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CheckpointEvaluation {
+  afterTurnIndex: number; // Index of the turn after which this evaluation was done
+  criterionId: string;
+  pass: boolean;
+  reasoning: string;
+}
+
+export interface ConversationResult {
+  id: string;
+  evalRunId: string;
+  testCaseId: string;
+  conversation: ConversationMessage[]; // The full conversation that occurred
+  checkpointEvaluations: CheckpointEvaluation[]; // Evaluations at specific checkpoints
+  finalEvaluation: Array<{ // Final holistic evaluation
+    criterionId: string;
+    pass: boolean;
+    reasoning: string;
+  }>;
   createdAt: Date;
 }
 
@@ -89,6 +144,31 @@ export const EDUCATION_CRITERIA: EvalCriterion[] = [
     id: "accurate",
     name: "Accurate Information",
     description: "Provides factually correct and up-to-date information",
+    category: "education",
+  },
+  // Conversation-specific criteria
+  {
+    id: "contextual-memory",
+    name: "Contextual Memory & Consistency",
+    description: "Remembers information from earlier in the conversation, doesn't contradict itself, and builds on what was previously discussed",
+    category: "education",
+  },
+  {
+    id: "conversational-flow",
+    name: "Natural Conversational Flow",
+    description: "Feels like talking to a human with appropriate transitions, varied responses, and natural pacing rather than robotic or repetitive patterns",
+    category: "education",
+  },
+  {
+    id: "progressive-disclosure",
+    name: "Progressive Disclosure & Pacing",
+    description: "Reveals information appropriately over time, doesn't overwhelm with too much at once, and matches the rhythm of the conversation",
+    category: "education",
+  },
+  {
+    id: "handles-confusion",
+    name: "Recovery from Confusion",
+    description: "Gracefully handles misunderstandings, asks clarifying questions when needed, and adapts if the student seems lost or confused",
     category: "education",
   },
 ];

@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { Project, TestCase, EvalResult } from "@/lib/types";
+import { Project, TestCase, ConversationResult } from "@/lib/types";
 
 const BATCH_SIZE = 2; // Process 2 test cases at a time to stay under serverless timeout
 
@@ -19,7 +19,7 @@ export default function EvaluatePage() {
   const [project, setProject] = useState<Project | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [criteriaIds, setCriteriaIds] = useState<string[]>([]);
-  const [results, setResults] = useState<EvalResult[]>([]);
+  const [results, setResults] = useState<ConversationResult[]>([]);
   const [currentBatch, setCurrentBatch] = useState(0);
   const [totalBatches, setTotalBatches] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function EvaluatePage() {
     setEvaluating(true);
     setError(null);
 
-    const allResults: EvalResult[] = [];
+    const allResults: ConversationResult[] = [];
 
     try {
       // Process test cases in batches

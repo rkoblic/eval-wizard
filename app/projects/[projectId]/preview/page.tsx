@@ -4,13 +4,25 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Loader2, ArrowRight } from "lucide-react";
-import { Project, TestCase, EDUCATION_CRITERIA } from "@/lib/types";
+import { CheckCircle2, XCircle, Loader2, ArrowRight, MessageCircle, User, Bot } from "lucide-react";
+import { Project, TestCase, EDUCATION_CRITERIA, ConversationTurn, ConversationMessage } from "@/lib/types";
 
 interface PreviewResult {
-  testCase: TestCase;
-  aiResponse: string;
-  judgments: Array<{
+  testCase: {
+    id: string;
+    turns: ConversationTurn[];
+    expectedBehavior?: string;
+  };
+  conversation: ConversationMessage[];
+  checkpointEvaluations: Array<{
+    checkpointTurn: number;
+    criterionId: string;
+    criterionName: string;
+    pass: boolean;
+    reasoning: string;
+  }>;
+  finalEvaluations: Array<{
+    checkpointTurn: number;
     criterionId: string;
     criterionName: string;
     pass: boolean;
@@ -135,8 +147,9 @@ export default function PreviewPage() {
   }
 
   const selectedTestCase = testCases.find((tc) => tc.id === selectedTestCaseId);
-  const passedCount = result?.judgments.filter((j) => j.pass).length || 0;
-  const totalCount = result?.judgments.length || 0;
+  const passedCount = result?.finalEvaluations.filter((j) => j.pass).length || 0;
+  const totalCount = result?.finalEvaluations.length || 0;
+  const turns = selectedTestCase?.turns || [{ role: "user" as const, content: selectedTestCase?.input || "", evaluateAfter: true }];
 
   return (
     <main className="min-h-screen p-8 bg-gradient-to-b from-background to-muted">
@@ -156,24 +169,33 @@ export default function PreviewPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Select Test Case</label>
+              <label className="text-sm font-medium">Select Conversation</label>
               <select
                 value={selectedTestCaseId}
                 onChange={(e) => setSelectedTestCaseId(e.target.value)}
                 className="w-full p-3 border rounded-md bg-background"
               >
-                {testCases.map((tc, index) => (
-                  <option key={tc.id} value={tc.id}>
-                    Test Case {index + 1}: {tc.input.substring(0, 60)}...
-                  </option>
-                ))}
+                {testCases.map((tc, index) => {
+                  const tcTurns = tc.turns || [{ role: "user" as const, content: tc.input || "", evaluateAfter: true }];
+                  const firstTurn = tcTurns[0]?.content || "";
+                  return (
+                    <option key={tc.id} value={tc.id}>
+                      Conversation {index + 1} ({tcTurns.length} turns): {firstTurn.substring(0, 50)}...
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
             {selectedTestCase && (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">Preview:</p>
-                <p className="text-sm">{selectedTestCase.input}</p>
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <p className="text-sm font-medium mb-2">Conversation Preview ({turns.length} turns):</p>
+                {turns.map((turn, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-sm">
+                    <User className="h-4 w-4 mt-0.5 text-primary" />
+                    <p className="flex-1">{turn.content}</p>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -199,59 +221,117 @@ export default function PreviewPage() {
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Preview Results</CardTitle>
+                <CardTitle>Conversation & AI Responses</CardTitle>
                 <CardDescription>
-                  {passedCount} of {totalCount} criteria passed
+                  Full conversation between student and AI
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-2">
-                    Student Query:
-                  </p>
-                  <p className="mb-4">{result.testCase.input}</p>
-
-                  <p className="text-sm font-medium text-muted-foreground mb-2">
-                    AI Response:
-                  </p>
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm">{result.aiResponse}</p>
+              <CardContent className="space-y-4">
+                {result.conversation.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-3 ${
+                      msg.role === "assistant" ? "bg-muted/50 p-4 rounded-lg" : ""
+                    }`}
+                  >
+                    {msg.role === "user" ? (
+                      <User className="h-5 w-5 mt-1 text-primary flex-shrink-0" />
+                    ) : (
+                      <Bot className="h-5 w-5 mt-1 text-purple-500 flex-shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium mb-1">
+                        {msg.role === "user" ? "Student" : "AI Assistant"}
+                      </p>
+                      <p className="text-sm">{msg.content}</p>
+                    </div>
                   </div>
-                </div>
+                ))}
+              </CardContent>
+            </Card>
 
-                <div>
-                  <p className="text-sm font-medium mb-3">Evaluation Results:</p>
-                  <div className="space-y-3">
-                    {result.judgments.map((judgment) => {
-                      const criterion = EDUCATION_CRITERIA.find(
-                        (c) => c.id === judgment.criterionId
-                      );
-                      return (
-                        <div
-                          key={judgment.criterionId}
-                          className={`p-4 rounded-lg border-2 ${
-                            judgment.pass
-                              ? "border-green-500 bg-green-50 dark:bg-green-950"
-                              : "border-red-500 bg-red-50 dark:bg-red-950"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-semibold">{judgment.criterionName}</p>
-                            {judgment.pass ? (
-                              <CheckCircle2 className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <XCircle className="h-5 w-5 text-red-500" />
-                            )}
+            {result.checkpointEvaluations.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Checkpoint Evaluations</CardTitle>
+                  <CardDescription>
+                    Evaluations at key conversation milestones
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {result.checkpointEvaluations.map((evaluation, idx) => {
+                    const criterion = EDUCATION_CRITERIA.find(
+                      (c) => c.id === evaluation.criterionId
+                    );
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-4 rounded-lg border-2 ${
+                          evaluation.pass
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+                            : "border-orange-500 bg-orange-50 dark:bg-orange-950"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <p className="font-semibold">{evaluation.criterionName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              After turn {evaluation.checkpointTurn + 1}
+                            </p>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {criterion?.description}
-                          </p>
-                          <p className="text-sm">{judgment.reasoning}</p>
+                          {evaluation.pass ? (
+                            <CheckCircle2 className="h-5 w-5 text-blue-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-orange-500" />
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {criterion?.description}
+                        </p>
+                        <p className="text-sm">{evaluation.reasoning}</p>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Final Evaluation Results</CardTitle>
+                <CardDescription>
+                  {passedCount} of {totalCount} criteria passed overall
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {result.finalEvaluations.map((judgment) => {
+                  const criterion = EDUCATION_CRITERIA.find(
+                    (c) => c.id === judgment.criterionId
+                  );
+                  return (
+                    <div
+                      key={judgment.criterionId}
+                      className={`p-4 rounded-lg border-2 ${
+                        judgment.pass
+                          ? "border-green-500 bg-green-50 dark:bg-green-950"
+                          : "border-red-500 bg-red-50 dark:bg-red-950"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-semibold">{judgment.criterionName}</p>
+                        {judgment.pass ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {criterion?.description}
+                      </p>
+                      <p className="text-sm">{judgment.reasoning}</p>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
 

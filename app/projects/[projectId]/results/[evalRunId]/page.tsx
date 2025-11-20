@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Loader2, Download } from "lucide-react";
-import { EvalRun, EvalResult, Project, TestCase, EDUCATION_CRITERIA } from "@/lib/types";
+import { CheckCircle2, XCircle, Loader2, Download, User, Bot, MessageCircle } from "lucide-react";
+import { EvalRun, ConversationResult, Project, TestCase, EDUCATION_CRITERIA } from "@/lib/types";
 
 export default function ResultsPage() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function ResultsPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [evalRun, setEvalRun] = useState<EvalRun | null>(null);
-  const [results, setResults] = useState<EvalResult[]>([]);
+  const [results, setResults] = useState<ConversationResult[]>([]);
   const [expandedTestCase, setExpandedTestCase] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,19 +84,41 @@ export default function ResultsPage() {
   };
 
   const exportToCSV = () => {
-    // Prepare CSV data
-    const headers = ["Test Case", "Criterion", "Pass/Fail", "Reasoning", "AI Response"];
-    const rows = results.map((result) => {
-      const testCase = testCases.find((tc) => tc.id === result.testCaseId);
-      const criterion = EDUCATION_CRITERIA.find((c) => c.id === result.criterionId);
+    // Prepare CSV data with conversation context
+    const headers = ["Conversation", "Turns", "Criterion", "Pass/Fail", "Reasoning", "Checkpoint/Final"];
+    const rows: string[][] = [];
 
-      return [
-        testCase?.input || "",
-        criterion?.name || "",
-        result.pass ? "PASS" : "FAIL",
-        result.reasoning,
-        result.aiResponse,
-      ];
+    results.forEach((convResult) => {
+      const testCase = testCases.find((tc) => tc.id === convResult.testCaseId);
+      const turns = testCase?.turns || [{ role: "user" as const, content: testCase?.input || "", evaluateAfter: true }];
+      const conversationSummary = turns[0]?.content.substring(0, 100) + "...";
+      const turnCount = turns.length.toString();
+
+      // Add checkpoint evaluations
+      convResult.checkpointEvaluations.forEach((evaluation) => {
+        const criterion = EDUCATION_CRITERIA.find((c) => c.id === evaluation.criterionId);
+        rows.push([
+          conversationSummary,
+          turnCount,
+          criterion?.name || "",
+          evaluation.pass ? "PASS" : "FAIL",
+          evaluation.reasoning,
+          `Checkpoint (Turn ${evaluation.afterTurnIndex + 1})`,
+        ]);
+      });
+
+      // Add final evaluations
+      convResult.finalEvaluation.forEach((evaluation) => {
+        const criterion = EDUCATION_CRITERIA.find((c) => c.id === evaluation.criterionId);
+        rows.push([
+          conversationSummary,
+          turnCount,
+          criterion?.name || "",
+          evaluation.pass ? "PASS" : "FAIL",
+          evaluation.reasoning,
+          "Final",
+        ]);
+      });
     });
 
     const csvContent = [
@@ -111,7 +133,7 @@ export default function ResultsPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `eval-results-${projectId}-${Date.now()}.csv`;
+    a.download = `eval-conversation-results-${projectId}-${Date.now()}.csv`;
     a.click();
   };
 
@@ -135,15 +157,25 @@ export default function ResultsPage() {
     );
   }
 
+  // Flatten results for statistics (extract finalEvaluation from each conversation)
+  const flattenedResults = results.flatMap((convResult) =>
+    convResult.finalEvaluation.map((evaluation) => ({
+      testCaseId: convResult.testCaseId,
+      criterionId: evaluation.criterionId,
+      pass: evaluation.pass,
+      reasoning: evaluation.reasoning,
+    }))
+  );
+
   // Calculate statistics
-  const totalTests = results.length;
-  const passedTests = results.filter((r) => r.pass).length;
+  const totalTests = flattenedResults.length;
+  const passedTests = flattenedResults.filter((r) => r.pass).length;
   const passRate = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
 
   // Group results by criterion
   const resultsByCriterion = evalRun?.criteriaIds.map((criterionId) => {
     const criterion = EDUCATION_CRITERIA.find((c) => c.id === criterionId);
-    const criterionResults = results.filter((r) => r.criterionId === criterionId);
+    const criterionResults = flattenedResults.filter((r) => r.criterionId === criterionId);
     const passed = criterionResults.filter((r) => r.pass).length;
     const total = criterionResults.length;
 
@@ -157,13 +189,22 @@ export default function ResultsPage() {
 
   // Group results by test case
   const resultsByTestCase = testCases.map((testCase) => {
-    const testCaseResults = results.filter((r) => r.testCaseId === testCase.id);
-    const passed = testCaseResults.filter((r) => r.pass).length;
-    const total = testCaseResults.length;
+    const convResult = results.find((r) => r.testCaseId === testCase.id);
+    if (!convResult) {
+      return {
+        testCase,
+        convResult: null,
+        passed: 0,
+        total: 0,
+      };
+    }
+
+    const passed = convResult.finalEvaluation.filter((e) => e.pass).length;
+    const total = convResult.finalEvaluation.length;
 
     return {
       testCase,
-      results: testCaseResults,
+      convResult,
       passed,
       total,
     };
@@ -255,92 +296,162 @@ export default function ResultsPage() {
         {/* Detailed Test Case Results */}
         <Card>
           <CardHeader>
-            <CardTitle>Detailed Test Results</CardTitle>
+            <CardTitle>Detailed Conversation Results</CardTitle>
             <CardDescription>
-              Click on any test case to see full details and judge reasoning
+              Click on any conversation to see the full dialogue, AI responses, and evaluation details
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {resultsByTestCase.map((item, index) => (
-              <Card
-                key={item.testCase.id}
-                className="border-2 cursor-pointer hover:border-primary/50"
-                onClick={() =>
-                  setExpandedTestCase(
-                    expandedTestCase === item.testCase.id ? null : item.testCase.id
-                  )
-                }
-              >
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg font-semibold">Test Case {index + 1}</h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
-                        {item.passed}/{item.total} passed
-                      </span>
-                      {item.passed === item.total ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-500" />
-                      )}
+            {resultsByTestCase.map((item, index) => {
+              if (!item.convResult) return null;
+
+              const turns = item.testCase.turns || [{ role: "user" as const, content: item.testCase.input || "", evaluateAfter: true }];
+
+              return (
+                <Card
+                  key={item.testCase.id}
+                  className="border-2 cursor-pointer hover:border-primary/50"
+                  onClick={() =>
+                    setExpandedTestCase(
+                      expandedTestCase === item.testCase.id ? null : item.testCase.id
+                    )
+                  }
+                >
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5 text-primary" />
+                        <h3 className="text-lg font-semibold">Conversation {index + 1}</h3>
+                        <span className="text-sm text-muted-foreground">({turns.length} turns)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {item.passed}/{item.total} passed
+                        </span>
+                        {item.passed === item.total ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Student Query:
-                      </p>
-                      <p className="mt-1">{item.testCase.input}</p>
-                    </div>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          First Student Message:
+                        </p>
+                        <p className="mt-1">{turns[0]?.content}</p>
+                      </div>
 
-                    {expandedTestCase === item.testCase.id && (
-                      <div className="space-y-4 mt-4 pt-4 border-t">
-                        <div>
-                          <p className="text-sm font-medium text-muted-foreground">
-                            AI Response:
-                          </p>
-                          <p className="mt-1 p-3 bg-muted rounded-md">
-                            {item.results[0]?.aiResponse}
-                          </p>
-                        </div>
-
-                        <div>
-                          <p className="text-sm font-medium mb-3">Judge Evaluations:</p>
-                          <div className="space-y-3">
-                            {item.results.map((result) => {
-                              const criterion = EDUCATION_CRITERIA.find(
-                                (c) => c.id === result.criterionId
-                              );
-                              return (
+                      {expandedTestCase === item.testCase.id && (
+                        <div className="space-y-4 mt-4 pt-4 border-t">
+                          {/* Full Conversation */}
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground mb-3">
+                              Full Conversation:
+                            </p>
+                            <div className="space-y-3">
+                              {item.convResult.conversation.map((msg, idx) => (
                                 <div
-                                  key={result.id}
-                                  className={`p-3 rounded-md border-2 ${
-                                    result.pass
-                                      ? "border-green-500 bg-green-50 dark:bg-green-950"
-                                      : "border-red-500 bg-red-50 dark:bg-red-950"
+                                  key={idx}
+                                  className={`flex items-start gap-3 ${
+                                    msg.role === "assistant" ? "bg-muted/50 p-3 rounded-lg" : ""
                                   }`}
                                 >
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="font-semibold">{criterion?.name}</p>
-                                    {result.pass ? (
-                                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                    ) : (
-                                      <XCircle className="h-5 w-5 text-red-500" />
-                                    )}
+                                  {msg.role === "user" ? (
+                                    <User className="h-5 w-5 mt-1 text-primary flex-shrink-0" />
+                                  ) : (
+                                    <Bot className="h-5 w-5 mt-1 text-purple-500 flex-shrink-0" />
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="text-xs font-medium mb-1 text-muted-foreground">
+                                      {msg.role === "user" ? "Student" : "AI Assistant"}
+                                    </p>
+                                    <p className="text-sm">{msg.content}</p>
                                   </div>
-                                  <p className="text-sm">{result.reasoning}</p>
                                 </div>
-                              );
-                            })}
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Checkpoint Evaluations */}
+                          {item.convResult.checkpointEvaluations.length > 0 && (
+                            <div className="pt-4 border-t">
+                              <p className="text-sm font-medium mb-3">Checkpoint Evaluations:</p>
+                              <div className="space-y-3">
+                                {item.convResult.checkpointEvaluations.map((evaluation, idx) => {
+                                  const criterion = EDUCATION_CRITERIA.find(
+                                    (c) => c.id === evaluation.criterionId
+                                  );
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`p-3 rounded-md border-2 ${
+                                        evaluation.pass
+                                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+                                          : "border-orange-500 bg-orange-50 dark:bg-orange-950"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div>
+                                          <p className="font-semibold">{criterion?.name}</p>
+                                          <p className="text-xs text-muted-foreground">
+                                            After turn {evaluation.afterTurnIndex + 1}
+                                          </p>
+                                        </div>
+                                        {evaluation.pass ? (
+                                          <CheckCircle2 className="h-5 w-5 text-blue-500" />
+                                        ) : (
+                                          <XCircle className="h-5 w-5 text-orange-500" />
+                                        )}
+                                      </div>
+                                      <p className="text-sm">{evaluation.reasoning}</p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Final Evaluations */}
+                          <div className="pt-4 border-t">
+                            <p className="text-sm font-medium mb-3">Final Judge Evaluations:</p>
+                            <div className="space-y-3">
+                              {item.convResult.finalEvaluation.map((evaluation) => {
+                                const criterion = EDUCATION_CRITERIA.find(
+                                  (c) => c.id === evaluation.criterionId
+                                );
+                                return (
+                                  <div
+                                    key={evaluation.criterionId}
+                                    className={`p-3 rounded-md border-2 ${
+                                      evaluation.pass
+                                        ? "border-green-500 bg-green-50 dark:bg-green-950"
+                                        : "border-red-500 bg-red-50 dark:bg-red-950"
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <p className="font-semibold">{criterion?.name}</p>
+                                      {evaluation.pass ? (
+                                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                      ) : (
+                                        <XCircle className="h-5 w-5 text-red-500" />
+                                      )}
+                                    </div>
+                                    <p className="text-sm">{evaluation.reasoning}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </CardContent>
         </Card>
 

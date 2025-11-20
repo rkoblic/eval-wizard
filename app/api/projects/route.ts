@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callOpenAI } from "@/lib/llm/openai-client";
-import { Project, TestCase } from "@/lib/types";
+import { Project, TestCase, ConversationTurn } from "@/lib/types";
 import { projects, testCases } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const testCasesWithIds: TestCase[] = generatedTestCases.map((tc, index) => ({
       id: `test_${projectId}_${index}`,
       projectId,
-      input: tc.input,
+      turns: tc.turns,
       expectedBehavior: tc.expectedBehavior,
       source: "ai_generated" as const,
       createdAt: new Date(),
@@ -83,30 +83,44 @@ export async function GET(request: NextRequest) {
 async function generateTestCases(
   description: string,
   systemPrompt: string
-): Promise<Array<{ input: string; expectedBehavior: string }>> {
-  const prompt = `You are helping to create test cases for an educational AI tool.
+): Promise<Array<{ turns: ConversationTurn[]; expectedBehavior: string }>> {
+  const prompt = `You are helping to create multi-turn conversation test cases for an educational AI tool.
 
 Tool Description: ${description}
 
 System Prompt: ${systemPrompt}
 
-Generate 12 diverse test cases to evaluate this educational AI tool. Include:
-- 4 typical use cases (common queries students would ask)
-- 4 edge cases (challenging situations, unclear requests, boundary conditions)
+Generate 12 diverse conversation-based test cases to evaluate this educational AI tool. Each test case should be a realistic multi-turn conversation (3-5 turns) between a student and the AI.
+
+Include:
+- 4 typical use cases (common learning conversations)
+- 4 edge cases (challenging situations, misunderstandings, boundary conditions)
 - 4 different student personas (struggling student, advanced student, off-topic query, inappropriate request)
 
 For each test case, provide:
-1. Input: The student's query or input
-2. Expected Behavior: What good behavior would look like (not the exact answer, but the approach/qualities)
+1. **turns**: An array of 3-5 student messages that represent a realistic conversation flow
+   - Mark 1-2 middle turns with "evaluateAfter: true" to create checkpoints for evaluation
+   - The final turn should always have "evaluateAfter: true"
+2. **expectedBehavior**: What good behavior would look like across the entire conversation
 
 Format your response as a JSON array like this:
 [
   {
-    "input": "Student query here",
-    "expectedBehavior": "Should provide scaffolded support without giving away the answer"
+    "turns": [
+      { "role": "user", "content": "Can you help me understand fractions?", "evaluateAfter": false },
+      { "role": "user", "content": "I still don't get why 1/2 is bigger than 1/4", "evaluateAfter": true },
+      { "role": "user", "content": "Oh I see! Can you give me a practice problem?", "evaluateAfter": true }
+    ],
+    "expectedBehavior": "Should build understanding progressively, check comprehension at checkpoints, remember context from earlier turns, and provide appropriate practice"
   },
   ...
 ]
+
+Remember:
+- Student messages should flow naturally, building on each other
+- Mark strategic points for checkpoint evaluation (middle turns where key concepts should be explained)
+- Always mark the final turn for evaluation
+- Keep conversations realistic and educational
 
 Provide ONLY the JSON array, no other text.`;
 
@@ -127,19 +141,31 @@ Provide ONLY the JSON array, no other text.`;
     return testCases;
   } catch (error) {
     console.error("Error generating test cases:", error);
-    // Return fallback test cases
+    // Return fallback conversation test cases
     return [
       {
-        input: "Can you help me with my homework?",
-        expectedBehavior: "Should ask clarifying questions and guide rather than give direct answers",
+        turns: [
+          { role: "user", content: "Can you help me with my homework?", evaluateAfter: false },
+          { role: "user", content: "I need help with question 5 about fractions", evaluateAfter: true },
+          { role: "user", content: "Can you just give me the answer?", evaluateAfter: true },
+        ],
+        expectedBehavior: "Should ask clarifying questions, guide understanding rather than give direct answers, and maintain pedagogical boundaries",
       },
       {
-        input: "What's the answer to question 5?",
-        expectedBehavior: "Should redirect to helping understand the problem, not providing the answer",
+        turns: [
+          { role: "user", content: "I don't understand this topic at all", evaluateAfter: false },
+          { role: "user", content: "Can you explain it in a simpler way?", evaluateAfter: true },
+          { role: "user", content: "That makes more sense! What should I practice?", evaluateAfter: true },
+        ],
+        expectedBehavior: "Should provide supportive, encouraging responses, break down concepts progressively, and remember student's initial confusion",
       },
       {
-        input: "I don't understand this topic at all",
-        expectedBehavior: "Should provide supportive, encouraging response and break down the concept",
+        turns: [
+          { role: "user", content: "What's 2+2?", evaluateAfter: false },
+          { role: "user", content: "Why is it 4?", evaluateAfter: true },
+          { role: "user", content: "Can you teach me about addition?", evaluateAfter: true },
+        ],
+        expectedBehavior: "Should guide towards understanding, explain reasoning, and adapt to student's evolving questions",
       },
     ];
   }

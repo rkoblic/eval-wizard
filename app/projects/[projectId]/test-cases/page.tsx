@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, Plus } from "lucide-react";
-import { TestCase, Project } from "@/lib/types";
+import { Trash2, Plus, MessageCircle, CheckCircle } from "lucide-react";
+import { TestCase, Project, ConversationTurn } from "@/lib/types";
 
 export default function TestCasesPage() {
   const router = useRouter();
@@ -51,7 +51,11 @@ export default function TestCasesPage() {
     const newTestCase: TestCase = {
       id: `test_${Date.now()}`,
       projectId,
-      input: "",
+      turns: [
+        { role: "user", content: "", evaluateAfter: false },
+        { role: "user", content: "", evaluateAfter: false },
+        { role: "user", content: "", evaluateAfter: true },
+      ],
       expectedBehavior: "",
       source: "manual",
       createdAt: new Date(),
@@ -63,6 +67,61 @@ export default function TestCasesPage() {
   const updateTestCase = (id: string, field: keyof TestCase, value: string) => {
     setTestCases(
       testCases.map((tc) => (tc.id === id ? { ...tc, [field]: value } : tc))
+    );
+  };
+
+  const updateTurn = (testCaseId: string, turnIndex: number, content: string) => {
+    setTestCases(
+      testCases.map((tc) => {
+        if (tc.id === testCaseId && tc.turns) {
+          const newTurns = [...tc.turns];
+          newTurns[turnIndex] = { ...newTurns[turnIndex], content };
+          return { ...tc, turns: newTurns };
+        }
+        return tc;
+      })
+    );
+  };
+
+  const toggleCheckpoint = (testCaseId: string, turnIndex: number) => {
+    setTestCases(
+      testCases.map((tc) => {
+        if (tc.id === testCaseId && tc.turns) {
+          const newTurns = [...tc.turns];
+          newTurns[turnIndex] = {
+            ...newTurns[turnIndex],
+            evaluateAfter: !newTurns[turnIndex].evaluateAfter,
+          };
+          return { ...tc, turns: newTurns };
+        }
+        return tc;
+      })
+    );
+  };
+
+  const addTurn = (testCaseId: string) => {
+    setTestCases(
+      testCases.map((tc) => {
+        if (tc.id === testCaseId && tc.turns) {
+          return {
+            ...tc,
+            turns: [...tc.turns, { role: "user", content: "", evaluateAfter: false }],
+          };
+        }
+        return tc;
+      })
+    );
+  };
+
+  const deleteTurn = (testCaseId: string, turnIndex: number) => {
+    setTestCases(
+      testCases.map((tc) => {
+        if (tc.id === testCaseId && tc.turns && tc.turns.length > 1) {
+          const newTurns = tc.turns.filter((_, idx) => idx !== turnIndex);
+          return { ...tc, turns: newTurns };
+        }
+        return tc;
+      })
     );
   };
 
@@ -108,80 +167,101 @@ export default function TestCasesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Review Test Cases</CardTitle>
+            <CardTitle>Review Test Conversations</CardTitle>
             <CardDescription>
-              We generated {testCases.length} test cases. Review, edit, or add more before running evaluations.
+              We generated {testCases.length} multi-turn conversation test cases. Review, edit turns, mark checkpoints, or add more before running evaluations.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {testCases.map((testCase, index) => (
-              <Card key={testCase.id} className="border-2">
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Test Case {index + 1}</h3>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteTestCase(testCase.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {testCases.map((testCase, index) => {
+              const turns = testCase.turns || [{ role: "user" as const, content: testCase.input || "", evaluateAfter: true }];
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Student Query
-                      </label>
-                      {editingId === testCase.id ? (
-                        <Textarea
-                          value={testCase.input}
-                          onChange={(e) =>
-                            updateTestCase(testCase.id, "input", e.target.value)
-                          }
-                          onBlur={() => setEditingId(null)}
-                          autoFocus
-                          className="min-h-[80px]"
-                        />
-                      ) : (
-                        <div
-                          onClick={() => setEditingId(testCase.id)}
-                          className="p-3 border rounded-md cursor-pointer hover:bg-muted/50 min-h-[80px]"
-                        >
-                          {testCase.input || "Click to edit..."}
-                        </div>
-                      )}
+              return (
+                <Card key={testCase.id} className="border-2">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5 text-primary" />
+                        <h3 className="text-lg font-semibold">Conversation {index + 1}</h3>
+                        <span className="text-sm text-muted-foreground">({turns.length} turns)</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteTestCase(testCase.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
 
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Expected Behavior
-                      </label>
-                      {editingId === testCase.id ? (
-                        <Textarea
-                          value={testCase.expectedBehavior || ""}
-                          onChange={(e) =>
-                            updateTestCase(
-                              testCase.id,
-                              "expectedBehavior",
-                              e.target.value
-                            )
-                          }
-                          className="min-h-[60px]"
-                        />
-                      ) : (
-                        <div
-                          onClick={() => setEditingId(testCase.id)}
-                          className="p-3 border rounded-md cursor-pointer hover:bg-muted/50 min-h-[60px] text-sm text-muted-foreground"
-                        >
-                          {testCase.expectedBehavior || "Click to edit..."}
+                    <div className="space-y-3">
+                      {turns.map((turn, turnIdx) => (
+                        <div key={turnIdx} className="relative pl-4 border-l-2 border-primary/20">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-muted-foreground">
+                                Turn {turnIdx + 1}
+                              </span>
+                              <button
+                                onClick={() => toggleCheckpoint(testCase.id, turnIdx)}
+                                className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${
+                                  turn.evaluateAfter
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                }`}
+                                title={turn.evaluateAfter ? "Checkpoint enabled" : "Click to mark as checkpoint"}
+                              >
+                                <CheckCircle className="h-3 w-3" />
+                                {turn.evaluateAfter ? "Checkpoint" : "No checkpoint"}
+                              </button>
+                            </div>
+                            {turns.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteTurn(testCase.id, turnIdx)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          <Textarea
+                            value={turn.content}
+                            onChange={(e) => updateTurn(testCase.id, turnIdx, e.target.value)}
+                            placeholder={`Student message ${turnIdx + 1}...`}
+                            className="min-h-[60px]"
+                          />
                         </div>
-                      )}
+                      ))}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => addTurn(testCase.id)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Turn
+                      </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                    <div className="mt-4 pt-4 border-t">
+                      <label className="text-sm font-medium mb-2 block">
+                        Expected Behavior (across conversation)
+                      </label>
+                      <Textarea
+                        value={testCase.expectedBehavior || ""}
+                        onChange={(e) =>
+                          updateTestCase(testCase.id, "expectedBehavior", e.target.value)
+                        }
+                        placeholder="What should the AI do well across this conversation?"
+                        className="min-h-[60px]"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
 
             <Button
               variant="outline"
@@ -189,7 +269,7 @@ export default function TestCasesPage() {
               onClick={addTestCase}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Test Case
+              Add Conversation
             </Button>
           </CardContent>
         </Card>
