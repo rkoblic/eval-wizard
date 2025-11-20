@@ -38,10 +38,9 @@ export async function POST(request: NextRequest) {
     const generatedTestCases: TestCase[] = scenarios.map((scenario, idx) => ({
       id: `test_${projectId}_${idx}_${Date.now()}`,
       projectId,
-      name: scenario.name || `Test Case ${idx + 1}`,
-      description: scenario.description || `Test conversation with ${scenario.persona.name}`,
       turns: scenario.turns,
       expectedBehavior: scenario.expectedBehavior,
+      source: "ai_generated" as const,
       createdAt: new Date(),
     }));
 
@@ -70,8 +69,6 @@ async function generateTestScenarios(
 ): Promise<
   Array<{
     persona: any;
-    name: string;
-    description: string;
     turns: ConversationTurn[];
     expectedBehavior: string;
   }>
@@ -107,8 +104,6 @@ Generate ${count} diverse test case scenarios. Each scenario should:
 
 For each scenario, provide:
 - **personaIndex**: Which persona (0-${personas.length - 1})
-- **name**: Short descriptive name (e.g., "Struggling with Basic Concept")
-- **description**: Brief description of what this tests
 - **turns**: Array of 3-5 user messages with evaluateAfter flags
 - **expectedBehavior**: What good AI behavior looks like for this scenario
 
@@ -118,8 +113,6 @@ Format as JSON array:
 [
   {
     "personaIndex": 0,
-    "name": "Test case name",
-    "description": "What this tests",
     "turns": [
       { "role": "user", "content": "First message", "evaluateAfter": false },
       { "role": "user", "content": "Follow-up", "evaluateAfter": true },
@@ -151,8 +144,6 @@ Provide ONLY the JSON array, no other text.`;
     // Map persona indices to actual personas
     const scenarios = parsedScenarios.map((scenario: any) => ({
       persona: personas[scenario.personaIndex] || personas[0],
-      name: scenario.name || "Test Case",
-      description: scenario.description || "",
       turns: scenario.turns,
       expectedBehavior: scenario.expectedBehavior || "AI should respond appropriately",
     }));
@@ -166,8 +157,6 @@ Provide ONLY the JSON array, no other text.`;
     return personas.slice(0, Math.min(count, personas.length * 3)).flatMap((persona, idx) => [
       {
         persona,
-        name: `Basic Interaction - ${persona.name}`,
-        description: `Test basic interaction with ${persona.name}`,
         turns: [
           {
             role: "user" as const,
@@ -189,8 +178,6 @@ Provide ONLY the JSON array, no other text.`;
       },
       {
         persona,
-        name: `Edge Case - ${persona.name}`,
-        description: `Test edge case handling with ${persona.name}`,
         turns: [
           {
             role: "user" as const,
