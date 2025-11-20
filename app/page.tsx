@@ -12,6 +12,7 @@ import { Sparkles } from "lucide-react";
 const SAMPLE_DATA = {
   name: "Writing Coach",
   description: "Helps adults learn how to write more effectively",
+  projectType: "coaching" as "tutoring" | "coaching" | "creative" | "customer_support" | "other",
   systemPrompt: `# ✨ **Custom GPT Prompt: Writing Tutor & Coach**
 
 ## **Purpose**
@@ -154,6 +155,7 @@ export default function Home() {
     name: "",
     description: "",
     systemPrompt: "",
+    projectType: "tutoring" as "tutoring" | "coaching" | "creative" | "customer_support" | "other",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,7 +163,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // Create project and generate test cases
+      // Create project (no longer auto-generates test cases)
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,8 +176,8 @@ export default function Home() {
 
       const { projectId } = await response.json();
 
-      // Redirect to test case review page
-      router.push(`/projects/${projectId}/test-cases`);
+      // Redirect to personas page
+      router.push(`/projects/${projectId}/personas`);
     } catch (error) {
       console.error("Error creating project:", error);
       alert("Failed to create project. Please try again.");
@@ -242,6 +244,26 @@ export default function Home() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="projectType">Project Type</Label>
+                <select
+                  id="projectType"
+                  value={formData.projectType}
+                  onChange={(e) => setFormData({ ...formData, projectType: e.target.value as any })}
+                  className="w-full p-3 border rounded-md bg-background"
+                  required
+                >
+                  <option value="tutoring">Tutoring / Education</option>
+                  <option value="coaching">Coaching / Personal Development</option>
+                  <option value="creative">Creative / Writing Assistant</option>
+                  <option value="customer_support">Customer Support</option>
+                  <option value="other">Other</option>
+                </select>
+                <p className="text-sm text-muted-foreground">
+                  This helps us generate more realistic test personas
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="description">What does your AI tool do?</Label>
                 <Textarea
                   id="description"
@@ -270,15 +292,15 @@ export default function Home() {
               </div>
 
               <Button type="submit" size="lg" className="w-full" disabled={loading}>
-                {loading ? "Generating test cases..." : "Generate Test Cases"}
+                {loading ? "Creating project..." : "Create Project & Define Audience"}
               </Button>
             </form>
           </CardContent>
         </Card>
 
         <div className="text-center text-sm text-muted-foreground">
-          <p>We'll generate 10-15 test cases based on your description.</p>
-          <p>You can review, edit, and add more before running evaluations.</p>
+          <p>Next, you'll define your audience and create realistic test personas.</p>
+          <p>Then you'll grade 10 sample conversations to train your personalized AI judge.</p>
         </div>
       </div>
     </main>

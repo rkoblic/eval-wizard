@@ -82,11 +82,17 @@ Verdict: [PASS or FAIL]`;
 /**
  * Use Claude as a judge to evaluate an entire conversation
  * Designed for multi-turn conversations where context and consistency matter
+ * Now supports personalized quality standards via few-shot examples
  */
 export async function judgeConversation(
   conversation: Array<{ role: "user" | "assistant"; content: string }>,
   criterion: { name: string; description: string },
-  isCheckpoint: boolean = false
+  isCheckpoint: boolean = false,
+  fewShotExamples?: Array<{
+    conversation: Array<{ role: "user" | "assistant"; content: string }>;
+    pass: boolean;
+    reasoning: string;
+  }>
 ): Promise<{ pass: boolean; reasoning: string }> {
   // Format the conversation for the judge
   const conversationText = conversation
@@ -103,19 +109,53 @@ export async function judgeConversation(
     ? "\n\nNote: This is a checkpoint evaluation. Evaluate the conversation so far, understanding that it may continue."
     : "\n\nNote: This is the complete conversation. Evaluate the entire exchange holistically.";
 
-  const judgePrompt = `You are evaluating an AI educational assistant's performance across a conversation.
+  // Format few-shot examples if provided
+  let fewShotSection = "";
+  if (fewShotExamples && fewShotExamples.length > 0) {
+    fewShotSection = `\n\n## Training Examples\n\nHere are examples of conversations previously graded by the user, which demonstrate their quality standards:\n\n`;
+
+    fewShotExamples.forEach((example, idx) => {
+      const exampleText = example.conversation
+        .map((msg) => {
+          if (msg.role === "user") {
+            return `Student: ${msg.content}`;
+          } else {
+            return `AI: ${msg.content}`;
+          }
+        })
+        .join("\n\n");
+
+      const verdict = example.pass ? "PASS" : "FAIL";
+      fewShotSection += `### Example ${idx + 1}: ${verdict}\n\n${exampleText}\n\nUser's Assessment: "${example.reasoning}"\nVerdict: ${verdict}\n\n`;
+    });
+
+    fewShotSection += `These examples show what the user considers good (PASS) and poor (FAIL) quality. Use these standards when evaluating new conversations.\n\n`;
+  }
+
+  const judgePrompt = `You are evaluating an AI assistant's performance across a conversation using personalized quality standards.
+
+## Conversation to Evaluate:
 
 ${conversationText}
 ${checkpointNote}
+${fewShotSection}
+## Evaluation Criterion:
 
-Evaluate if the conversation PASSES or FAILS on this criterion:
-- ${criterion.name}: ${criterion.description}
+**${criterion.name}**: ${criterion.description}
 
-For conversation-level criteria like "Contextual Memory & Consistency" or "Natural Conversational Flow", evaluate across ALL turns:
+## Your Task:
+
+Evaluate if the conversation PASSES or FAILS on the criterion "${criterion.name}". ${
+  fewShotExamples && fewShotExamples.length > 0
+    ? "Consider the training examples above to understand the user's quality standards and apply those same standards to this new conversation."
+    : "Evaluate based on the criterion description provided."
+}
+
+For conversation-level criteria, evaluate across ALL turns:
 - Does the AI remember and build on earlier exchanges?
 - Is the flow natural and coherent?
 - Are transitions between topics handled well?
-- Does the AI maintain consistent personality and approach?
+- Does the AI maintain appropriate tone and approach?
 
 First, provide your reasoning (2-3 sentences explaining why it passes or fails, citing specific turns if relevant).
 Then, give your final verdict as either "PASS" or "FAIL".

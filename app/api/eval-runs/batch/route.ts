@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { EvalResult, EDUCATION_CRITERIA, normalizeTestCase, ConversationResult } from "@/lib/types";
 import { judgeConversation } from "@/lib/llm/anthropic-client";
 import { executeConversation } from "@/lib/llm/conversation-executor";
-import { projects, testCases } from "@/lib/storage";
+import { projects, testCases, calibrationResults } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,10 +30,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No test cases found" }, { status: 404 });
     }
 
-    // Get criteria
-    const criteria = EDUCATION_CRITERIA.filter((c) =>
-      criteriaIds.includes(c.id)
-    );
+    // Get criteria - try to load from calibration first, fallback to EDUCATION_CRITERIA
+    const calibrationResult = calibrationResults.get(projectId);
+    let criteria: Array<{ id: string; name: string; description: string }> = [];
+    let fewShotExamples: Array<{
+      conversation: Array<{ role: "user" | "assistant"; content: string }>;
+      pass: boolean;
+      reasoning: string;
+    }> = [];
+
+    if (calibrationResult && calibrationResult.approvedByUser) {
+      // Use custom calibrated criteria
+      criteria = calibrationResult.customCriteria.filter((c) =>
+        criteriaIds.includes(c.id)
+      );
+
+      // Prepare few-shot examples for the judge
+      fewShotExamples = calibrationResult.fewShotExamples.map((example) => ({
+        conversation: example.conversation,
+        pass: example.userGrade.pass,
+        reasoning: example.userGrade.reasoning,
+      }));
+
+      console.log(`Using ${criteria.length} calibrated criteria with ${fewShotExamples.length} few-shot examples`);
+    } else {
+      // Fallback to default education criteria
+      criteria = EDUCATION_CRITERIA.filter((c) =>
+        criteriaIds.includes(c.id)
+      );
+      console.log(`Using ${criteria.length} default criteria (no calibration found)`);
+    }
 
     const results: ConversationResult[] = [];
 
@@ -80,7 +106,8 @@ export async function POST(request: NextRequest) {
                 const judgment = await judgeConversation(
                   conversationUpToCheckpoint,
                   criterion,
-                  !isFinal
+                  !isFinal,
+                  fewShotExamples.length > 0 ? fewShotExamples : undefined
                 );
 
                 return {

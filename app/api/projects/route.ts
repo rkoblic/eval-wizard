@@ -5,7 +5,7 @@ import { projects, testCases } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, description, systemPrompt } = await request.json();
+    const { name, description, systemPrompt, projectType } = await request.json();
 
     // Validate input
     if (!name || !description || !systemPrompt) {
@@ -22,31 +22,19 @@ export async function POST(request: NextRequest) {
       name,
       description,
       productType: "system_prompt",
+      projectType: projectType || "other",
       systemPrompt,
       createdAt: new Date(),
     };
 
     projects.set(projectId, project);
 
-    // Generate test cases using AI
-    const generatedTestCases = await generateTestCases(description, systemPrompt);
-
-    // Store test cases
-    const testCasesWithIds: TestCase[] = generatedTestCases.map((tc, index) => ({
-      id: `test_${projectId}_${index}`,
-      projectId,
-      turns: tc.turns,
-      expectedBehavior: tc.expectedBehavior,
-      source: "ai_generated" as const,
-      createdAt: new Date(),
-    }));
-
-    testCases.set(projectId, testCasesWithIds);
+    // No longer auto-generate test cases - users will define personas first
+    // Test cases will be generated after calibration using personas
 
     return NextResponse.json({
       projectId,
       project,
-      testCases: testCasesWithIds,
     });
   } catch (error) {
     console.error("Error creating project:", error);

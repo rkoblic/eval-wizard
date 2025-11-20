@@ -1,12 +1,14 @@
 // Core types for the eval system
 
 export type ProductType = "custom_gpt" | "system_prompt";
+export type ProjectType = "tutoring" | "coaching" | "creative" | "customer_support" | "other";
 
 export interface Project {
   id: string;
   name: string;
   description: string;
   productType: ProductType;
+  projectType?: ProjectType; // Category for better persona generation
   systemPrompt: string;
   createdAt: Date;
 }
@@ -100,6 +102,61 @@ export interface ConversationResult {
     reasoning: string;
   }>;
   createdAt: Date;
+}
+
+// Persona and Calibration Types
+export interface Persona {
+  id: string;
+  projectId: string;
+  name: string; // e.g., "Struggling High School Student"
+  demographics: {
+    ageRange?: string; // e.g., "14-16"
+    role?: string; // e.g., "High school student", "Marketing professional"
+    experienceLevel?: string; // e.g., "Beginner", "Intermediate"
+  };
+  goals: string[]; // What they want to achieve
+  challenges: string[]; // What they struggle with
+  context: string; // Additional behavioral context
+  createdAt: Date;
+}
+
+export interface HumanGradedConversation {
+  id: string;
+  projectId: string;
+  persona: Persona;
+  conversation: ConversationMessage[]; // The full conversation
+  userGrade: {
+    pass: boolean;
+    reasoning: string; // Why did it pass or fail
+  };
+  createdAt: Date;
+}
+
+export interface CustomCriterion {
+  id: string;
+  name: string;
+  description: string;
+  derivedFrom: string; // Summary of the pattern in user feedback
+}
+
+export interface CalibrationResult {
+  id: string;
+  projectId: string;
+  customCriteria: CustomCriterion[]; // Criteria derived from user feedback
+  fewShotExamples: HumanGradedConversation[]; // The 10 graded conversations
+  createdAt: Date;
+  approvedByUser: boolean;
+}
+
+export interface CalibrationProgress {
+  projectId: string;
+  totalRequired: number; // Usually 10
+  completed: number;
+  grades: Array<{
+    conversationId: string;
+    pass: boolean;
+    reasoning: string;
+  }>;
 }
 
 // Predefined education-focused evaluation criteria
