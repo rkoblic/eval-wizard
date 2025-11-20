@@ -46,7 +46,11 @@ export async function POST(request: NextRequest) {
       projectId,
       totalRequired: conversations.length,
       completed: 0,
-      grades: [],
+      grades: [] as Array<{
+        conversationId: string;
+        pass: boolean;
+        reasoning: string;
+      }>,
     };
 
     // Check if this grade already exists in progress
