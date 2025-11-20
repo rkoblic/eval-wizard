@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callOpenAI } from "@/lib/llm/openai-client";
 import { Project, TestCase } from "@/lib/types";
-
-// In-memory storage for MVP (replace with database later)
-const projects = new Map<string, Project>();
-const testCases = new Map<string, TestCase[]>();
+import { projects, testCases } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {

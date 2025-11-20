@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TestCase } from "@/lib/types";
-
-// In-memory storage (shared with projects route)
-// In production, this would be in a database
-const testCasesStore = new Map<string, TestCase[]>();
+import { testCases } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
-    const { projectId, testCases } = await request.json();
+    const { projectId, testCases: testCasesData } = await request.json();
 
-    if (!projectId || !testCases) {
+    if (!projectId || !testCasesData) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    testCasesStore.set(projectId, testCases);
+    testCases.set(projectId, testCasesData);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -38,7 +35,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const testCases = testCasesStore.get(projectId) || [];
+  const projectTestCases = testCases.get(projectId) || [];
 
-  return NextResponse.json({ testCases });
+  return NextResponse.json({ testCases: projectTestCases });
 }

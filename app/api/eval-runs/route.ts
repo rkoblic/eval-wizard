@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { EvalRun, EvalResult, EDUCATION_CRITERIA } from "@/lib/types";
 import { testAIProduct } from "@/lib/llm/openai-client";
 import { judgeResponse } from "@/lib/llm/anthropic-client";
-
-// In-memory storage
-const evalRuns = new Map<string, EvalRun>();
-const evalResults = new Map<string, EvalResult[]>();
-
-// Import from other routes (in production, use shared store/database)
-declare const projects: Map<string, any>;
-declare const testCases: Map<string, any[]>;
+import { projects, testCases, evalRuns, evalResults } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,14 +15,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch project and test cases
-    const projectResponse = await fetch(
-      `${request.nextUrl.origin}/api/projects?id=${projectId}`
-    );
-    const { project, testCases: projectTestCases } = await projectResponse.json();
+    // Get project and test cases from shared storage
+    const project = projects.get(projectId);
+    const projectTestCases = testCases.get(projectId) || [];
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    if (projectTestCases.length === 0) {
+      return NextResponse.json({ error: "No test cases found" }, { status: 404 });
     }
 
     // Create eval run
