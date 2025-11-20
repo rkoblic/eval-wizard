@@ -81,6 +81,7 @@ export interface EvalResult {
 export interface ConversationMessage {
   role: "user" | "assistant";
   content: string;
+  evaluateAfter?: boolean; // For user messages, marks checkpoint for evaluation
 }
 
 export interface CheckpointEvaluation {

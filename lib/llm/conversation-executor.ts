@@ -19,6 +19,7 @@ export async function executeConversation(
     conversation.push({
       role: "user",
       content: turn.content,
+      evaluateAfter: turn.evaluateAfter,
     });
 
     // Get AI response with full conversation history as context
