@@ -45,33 +45,30 @@ export default function CriteriaPage() {
     );
   };
 
+  const handlePreview = () => {
+    if (selectedCriteria.length === 0) {
+      alert("Please select at least one criterion");
+      return;
+    }
+
+    // Store criteria in session storage for preview page
+    sessionStorage.setItem(`criteria_${projectId}`, JSON.stringify(selectedCriteria));
+
+    // Navigate to preview
+    router.push(`/projects/${projectId}/preview`);
+  };
+
   const handleRunEval = async () => {
     if (selectedCriteria.length === 0) {
       alert("Please select at least one criterion");
       return;
     }
 
-    // Create eval run
-    try {
-      const response = await fetch(`/api/eval-runs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          criteriaIds: selectedCriteria,
-        }),
-      });
+    // Store criteria in session storage
+    sessionStorage.setItem(`criteria_${projectId}`, JSON.stringify(selectedCriteria));
 
-      if (!response.ok) throw new Error("Failed to create eval run");
-
-      const { evalRunId } = await response.json();
-
-      // Redirect to results page
-      router.push(`/projects/${projectId}/results/${evalRunId}`);
-    } catch (error) {
-      console.error("Error creating eval run:", error);
-      alert("Failed to start evaluation");
-    }
+    // Navigate to full evaluation
+    router.push(`/projects/${projectId}/evaluate`);
   };
 
   if (loading) {
@@ -126,23 +123,47 @@ export default function CriteriaPage() {
           </CardContent>
         </Card>
 
-        <div className="flex items-center justify-between p-4 bg-card border rounded-lg">
-          <div>
-            <p className="font-semibold">
-              {selectedCriteria.length} criteria selected
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Evaluations will run on all test cases
-            </p>
-          </div>
-          <Button
-            size="lg"
-            onClick={handleRunEval}
-            disabled={selectedCriteria.length === 0}
-          >
-            Run Evaluation
-          </Button>
-        </div>
+        <Card className="border-2">
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div>
+                <p className="font-semibold text-lg">
+                  {selectedCriteria.length} criteria selected
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Ready to evaluate your AI tool
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handlePreview}
+                  disabled={selectedCriteria.length === 0}
+                  className="flex-1"
+                >
+                  Preview Evaluation
+                  <span className="ml-2 text-xs bg-primary/10 px-2 py-0.5 rounded">
+                    ~10 sec
+                  </span>
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={handleRunEval}
+                  disabled={selectedCriteria.length === 0}
+                  className="flex-1"
+                >
+                  Run Full Evaluation
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center">
+                💡 Try a preview first to verify your criteria are working correctly
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="flex justify-between">
           <Button

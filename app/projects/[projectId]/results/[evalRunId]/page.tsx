@@ -51,12 +51,33 @@ export default function ResultsPage() {
 
   const loadEvalRun = async () => {
     try {
-      const response = await fetch(`/api/eval-runs?id=${evalRunId}`);
-      if (!response.ok) throw new Error("Failed to load eval run");
+      // First check session storage for batched results
+      const sessionResults = sessionStorage.getItem(`eval_results_${evalRunId}`);
+      const sessionCriteria = sessionStorage.getItem(`criteria_${projectId}`);
 
-      const data = await response.json();
-      setEvalRun(data.evalRun);
-      setResults(data.results);
+      if (sessionResults && sessionCriteria) {
+        // Load from session storage (batched evaluation)
+        const parsedResults = JSON.parse(sessionResults);
+        const criteriaIds = JSON.parse(sessionCriteria);
+
+        setResults(parsedResults);
+        setEvalRun({
+          id: evalRunId,
+          projectId,
+          status: "completed",
+          criteriaIds,
+          createdAt: new Date(),
+          completedAt: new Date(),
+        });
+      } else {
+        // Try to load from API (old method)
+        const response = await fetch(`/api/eval-runs?id=${evalRunId}`);
+        if (!response.ok) throw new Error("Failed to load eval run");
+
+        const data = await response.json();
+        setEvalRun(data.evalRun);
+        setResults(data.results);
+      }
     } catch (error) {
       console.error("Error loading eval run:", error);
     }
